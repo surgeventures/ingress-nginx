@@ -61,6 +61,14 @@ const (
 	// ErrFilesPathVar is the name of the environment variable indicating
 	// the location on disk of files served by the handler.
 	ErrFilesPathVar = "ERROR_FILES_PATH"
+
+	// Refresh specific
+
+	// RefreshFreshaURI version check endpoint for Fresha
+	RefreshFreshaURI = "/version-checks/fresha"
+
+	// RefreshShedulURI version check endpoint for Shedul
+	RefreshShedulURI = "/version-checks/shedul"
 )
 
 func main() {
@@ -82,7 +90,13 @@ func main() {
 
 func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		refreshHeaders := map[string]string{
+			"Content-Type":                "application/vnd.api+json; charset=utf-8",
+			"Access-Control-Allow-Origin": "*",
+		}
+		file := ""
 		start := time.Now()
+		customExt := ""
 		ext := "html"
 
 		if os.Getenv("DEBUG") != "" {
@@ -120,17 +134,36 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			code = 404
 			log.Printf("unexpected error reading return code: %v. Using %v", err, code)
 		}
-		w.WriteHeader(code)
-
 		if !strings.HasPrefix(ext, ".") {
 			ext = "." + ext
 		}
-		file := fmt.Sprintf("%v/%v%v", path, code, ext)
+		// Custom extension only used by refresh application
+		uri := r.Header.Get(OriginalURI)
+		serviceName := r.Header.Get(ServiceName)
+		if serviceName == "refresh" {
+			log.Printf("Detected request to refresh. Mocking response")
+			// Set custom headers
+			w.WriteHeader(code)
+			for header, value := range refreshHeaders {
+				w.Header().Set(header, value)
+			}
+			// Choose proper response file
+			if strings.Contains(uri, RefreshFreshaURI) {
+				customExt = "-refresh-fresha" + ext
+			} else if strings.Contains(uri, RefreshShedulURI) {
+				customExt = "-refresh-shedul" + ext
+			} else {
+				customExt = ext
+			}
+			file = fmt.Sprintf("%v/%v%v", path, code, customExt)
+		} else {
+			file = fmt.Sprintf("%v/%v%v", path, code, ext)
+		}
 		f, err := os.Open(file)
 		if err != nil {
 			log.Printf("unexpected error opening file: %v", err)
 			scode := strconv.Itoa(code)
-			file := fmt.Sprintf("%v/%cxx%v", path, scode[0], ext)
+			file = fmt.Sprintf("%v/%cxx%v", path, scode[0], ext)
 			f, err := os.Open(file)
 			if err != nil {
 				log.Printf("unexpected error opening file: %v", err)
@@ -145,6 +178,8 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 		defer f.Close()
 		log.Printf("serving custom error response for code %v and format %v from file %v", code, format, file)
 		io.Copy(w, f)
+
+		w.WriteHeader(code)
 
 		duration := time.Now().Sub(start).Seconds()
 
