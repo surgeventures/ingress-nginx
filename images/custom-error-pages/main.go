@@ -157,6 +157,7 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			}
 			file = fmt.Sprintf("%v/%v%v", path, code, customExt)
 		} else {
+			w.WriteHeader(code)
 			file = fmt.Sprintf("%v/%v%v", path, code, ext)
 		}
 		f, err := os.Open(file)
@@ -178,9 +179,6 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 		defer f.Close()
 		log.Printf("serving custom error response for code %v and format %v from file %v", code, format, file)
 		io.Copy(w, f)
-
-		w.WriteHeader(code)
-
 		duration := time.Now().Sub(start).Seconds()
 
 		proto := strconv.Itoa(r.ProtoMajor)
