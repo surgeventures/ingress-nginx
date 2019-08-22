@@ -1,0 +1,20 @@
+{
+  "data": {
+    "attributes": {
+      "application": "fresha",
+      "deprecated": false,
+      "locked": false,
+      "maintenance-mode": {
+        "enabled": true,
+        "eta": "2019-09-01T08:35:00.000Z",
+        "message": "We're currently undergoing scheduled maintenance. Please try again later at %{eta}"
+      },
+      "recheck-duration": 3600000
+    },
+    "id": "fresha",
+    "type": "version-checks"
+  },
+  "jsonapi": {
+    "version": "1.0"
+  }
+}

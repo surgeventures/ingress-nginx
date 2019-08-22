@@ -72,7 +72,7 @@ const (
 )
 
 func main() {
-	errFilesPath := "/www"
+	errFilesPath := "./rootfs/www"
 	if os.Getenv(ErrFilesPathVar) != "" {
 		errFilesPath = os.Getenv(ErrFilesPathVar)
 	}
@@ -93,6 +93,7 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 		refreshHeaders := map[string]string{
 			"Content-Type":                "application/vnd.api+json; charset=utf-8",
 			"Access-Control-Allow-Origin": "*",
+			"Nginx": "true",
 		}
 		file := ""
 		start := time.Now()
@@ -143,15 +144,15 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 		if serviceName == "refresh" {
 			log.Printf("Detected request to refresh. Mocking response")
 			// Set custom headers
-			w.WriteHeader(code)
 			for header, value := range refreshHeaders {
 				w.Header().Set(header, value)
 			}
+			w.WriteHeader(code)
 			// Choose proper response file
 			if strings.Contains(uri, RefreshFreshaURI) {
-				customExt = "-refresh-fresha" + ext
+				customExt = "-refresh-fresha.json"
 			} else if strings.Contains(uri, RefreshShedulURI) {
-				customExt = "-refresh-shedul" + ext
+				customExt = "-refresh-shedul.json"
 			} else {
 				customExt = ext
 			}
