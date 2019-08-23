@@ -72,7 +72,7 @@ const (
 )
 
 func main() {
-	errFilesPath := "./rootfs/www"
+	errFilesPath := "/www"
 	if os.Getenv(ErrFilesPathVar) != "" {
 		errFilesPath = os.Getenv(ErrFilesPathVar)
 	}
@@ -135,6 +135,7 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			code = 404
 			log.Printf("unexpected error reading return code: %v. Using %v", err, code)
 		}
+		customCode := code
 		if !strings.HasPrefix(ext, ".") {
 			ext = "." + ext
 		}
@@ -147,18 +148,18 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			for header, value := range refreshHeaders {
 				w.Header().Set(header, value)
 			}
-			w.WriteHeader(code)
 			// Choose proper response file
 			if strings.Contains(uri, RefreshFreshaURI) {
 				customExt = "-refresh-fresha.json"
+				customCode = http.StatusOK
 			} else if strings.Contains(uri, RefreshShedulURI) {
 				customExt = "-refresh-shedul.json"
+				customCode = http.StatusOK
 			} else {
 				customExt = ext
 			}
 			file = fmt.Sprintf("%v/%v%v", path, code, customExt)
 		} else {
-			w.WriteHeader(code)
 			file = fmt.Sprintf("%v/%v%v", path, code, ext)
 		}
 		f, err := os.Open(file)
@@ -174,11 +175,13 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			}
 			defer f.Close()
 			log.Printf("serving custom error response for code %v and format %v from file %v", code, format, file)
+			w.WriteHeader(code)
 			io.Copy(w, f)
 			return
 		}
 		defer f.Close()
 		log.Printf("serving custom error response for code %v and format %v from file %v", code, format, file)
+		w.WriteHeader(customCode)
 		io.Copy(w, f)
 		duration := time.Now().Sub(start).Seconds()
 
