@@ -3,13 +3,13 @@
     "attributes": {
       "application": "fresha",
       "deprecated": false,
-      "locked": false,
+      "locked": true,
       "maintenance-mode": {
         "enabled": true,
         "eta": "2019-09-01T08:35:00.000Z",
-        "message": "We're currently undergoing scheduled maintenance. Please try again later at %{eta}"
+        "message": "Our team are running scheduled maintenance to improve your experience. Not to worry, we'll be back to normal again soon. Check back after %{eta} to access your account."
       },
-      "recheck-duration": 3600000
+      "recheck-duration": null
     },
     "id": "fresha",
     "type": "version-checks"
