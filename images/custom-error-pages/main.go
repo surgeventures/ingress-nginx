@@ -81,32 +81,33 @@ func main() {
 }
 
 func modifyOutput(w http.ResponseWriter, ext string, path string, service string, uri string, headers map[string]string, endpoints map[string]map[string]string, ingressCode int, returnCode int) (string, *strings.Reader, int) {
-	filename := ""
-	var content *strings.Reader
-	var customCode int
+	// default file based on ingress code and file extension
+	filename := fmt.Sprintf("%v/%v%v", path, ingressCode, ext)
+	// default return code copied from ingress
+	customCode := ingressCode
+	var content *strings.Reader = nil
 
 	log.Printf("Detected request to %v. Mocking response", service)
 	for header, value := range headers {
 		w.Header().Set(header, value)
 	}
-	// default file based on ingress code and file extension
-	filename = fmt.Sprintf("%v/%v%v", path, ingressCode, ext)
-
 	// Choose custom response file for if endpoint listed
 	for endpoint, config := range endpoints {
-		if os.Getenv(config["env"]) != "" {
+		if os.Getenv(config["env"]) != "" && strings.Contains(uri, endpoint) {
 			content = strings.NewReader(os.Getenv(config["env"]))
+			customCode = returnCode
+			log.Printf("Used environment variable %v to prepare response for %v endpoint", config["env"], endpoint)
 		} else if strings.Contains(uri, endpoint) {
-			customCode = http.StatusOK
+			customCode = returnCode
 			filename = fmt.Sprintf("%v/%v", path, config["file"])
 		}
 	}
-
 	return filename, content, customCode
 }
 
 func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// refresh variables
 		refreshHeaders := map[string]string{
 			"Content-Type":                     "application/vnd.api+json; charset=utf-8",
 			"Access-Control-Allow-Origin":      r.Header.Get("Origin"),
@@ -121,9 +122,9 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 				"env":  "REFRESH_SHEDUL_MAINTENANCE"},
 		}
 
-		filename := ""
 		var content *strings.Reader = nil
 		start := time.Now()
+		filename := ""
 		ext := "html"
 
 		if os.Getenv("DEBUG") != "" {
@@ -195,7 +196,7 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 				return
 			}
 			defer f.Close()
-			log.Printf("serving custom error response for code %v and format %v from file %v", code, format, filename)
+			log.Printf("serving custom error response for code %v and format %v from file %v", customCode, format, filename)
 			w.WriteHeader(customCode)
 			io.Copy(w, f)
 		}
