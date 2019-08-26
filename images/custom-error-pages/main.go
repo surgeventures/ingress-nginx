@@ -91,9 +91,9 @@ func main() {
 func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		refreshHeaders := map[string]string{
-			"Content-Type":                "application/vnd.api+json; charset=utf-8",
-			"Access-Control-Allow-Origin": "*",
-			"Nginx": "true",
+			"Content-Type":                     "application/vnd.api+json; charset=utf-8",
+			"Access-Control-Allow-Origin":      r.Header.Get("Origin"),
+			"Access-Control-Allow-Credentials": "true",
 		}
 		file := ""
 		start := time.Now()
@@ -150,15 +150,16 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			}
 			// Choose proper response file
 			if strings.Contains(uri, RefreshFreshaURI) {
-				customExt = "-refresh-fresha.json"
+				customExt = "refresh-fresha.json"
 				customCode = http.StatusOK
+				file = fmt.Sprintf("%v/%v", path, customExt)
 			} else if strings.Contains(uri, RefreshShedulURI) {
-				customExt = "-refresh-shedul.json"
+				customExt = "refresh-shedul.json"
 				customCode = http.StatusOK
+				file = fmt.Sprintf("%v/%v", path, customExt)
 			} else {
-				customExt = ext
+				file = fmt.Sprintf("%v/%v%v", path, code, ext)
 			}
-			file = fmt.Sprintf("%v/%v%v", path, code, customExt)
 		} else {
 			file = fmt.Sprintf("%v/%v%v", path, code, ext)
 		}
