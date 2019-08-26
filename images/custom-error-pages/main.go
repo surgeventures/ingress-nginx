@@ -61,14 +61,6 @@ const (
 	// ErrFilesPathVar is the name of the environment variable indicating
 	// the location on disk of files served by the handler.
 	ErrFilesPathVar = "ERROR_FILES_PATH"
-
-	// Refresh specific
-
-	// RefreshFreshaURI version check endpoint for Fresha
-	RefreshFreshaURI = "/version-checks/fresha"
-
-	// RefreshShedulURI version check endpoint for Shedul
-	RefreshShedulURI = "/version-checks/shedul"
 )
 
 func main() {
@@ -88,6 +80,31 @@ func main() {
 	http.ListenAndServe(fmt.Sprintf(":8080"), nil)
 }
 
+func modifyOutput(w http.ResponseWriter, ext string, path string, service string, uri string, headers map[string]string, endpoints map[string]map[string]string, ingressCode int, returnCode int) (string, *strings.Reader, int) {
+	filename := ""
+	var content *strings.Reader
+	var customCode int
+
+	log.Printf("Detected request to %v. Mocking response", service)
+	for header, value := range headers {
+		w.Header().Set(header, value)
+	}
+	// default file based on ingress code and file extension
+	filename = fmt.Sprintf("%v/%v%v", path, ingressCode, ext)
+
+	// Choose custom response file for if endpoint listed
+	for endpoint, config := range endpoints {
+		if os.Getenv(config["env"]) != "" {
+			content = strings.NewReader(os.Getenv(config["env"]))
+		} else if strings.Contains(uri, endpoint) {
+			customCode = http.StatusOK
+			filename = fmt.Sprintf("%v/%v", path, config["file"])
+		}
+	}
+
+	return filename, content, customCode
+}
+
 func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		refreshHeaders := map[string]string{
@@ -95,9 +112,18 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 			"Access-Control-Allow-Origin":      r.Header.Get("Origin"),
 			"Access-Control-Allow-Credentials": "true",
 		}
-		file := ""
+		refreshEndpoints := map[string]map[string]string{
+			"/version-checks/fresha": {
+				"file": "refresh-fresha.json",
+				"env":  "REFRESH_FRESHA_MAINTENANCE"},
+			"/version-checks/shedul": {
+				"file": "refresh-shedul.json",
+				"env":  "REFRESH_SHEDUL_MAINTENANCE"},
+		}
+
+		filename := ""
+		var content *strings.Reader = nil
 		start := time.Now()
-		customExt := ""
 		ext := "html"
 
 		if os.Getenv("DEBUG") != "" {
@@ -143,47 +169,37 @@ func errorHandler(path string) func(http.ResponseWriter, *http.Request) {
 		uri := r.Header.Get(OriginalURI)
 		serviceName := r.Header.Get(ServiceName)
 		if serviceName == "refresh" {
-			log.Printf("Detected request to refresh. Mocking response")
-			// Set custom headers
-			for header, value := range refreshHeaders {
-				w.Header().Set(header, value)
-			}
-			// Choose proper response file
-			if strings.Contains(uri, RefreshFreshaURI) {
-				customExt = "refresh-fresha.json"
-				customCode = http.StatusOK
-				file = fmt.Sprintf("%v/%v", path, customExt)
-			} else if strings.Contains(uri, RefreshShedulURI) {
-				customExt = "refresh-shedul.json"
-				customCode = http.StatusOK
-				file = fmt.Sprintf("%v/%v", path, customExt)
-			} else {
-				file = fmt.Sprintf("%v/%v%v", path, code, ext)
-			}
+			filename, content, customCode = modifyOutput(w, ext, path, serviceName, uri, refreshHeaders, refreshEndpoints, code, 200)
 		} else {
-			file = fmt.Sprintf("%v/%v%v", path, code, ext)
+			filename = fmt.Sprintf("%v/%v%v", path, code, ext)
 		}
-		f, err := os.Open(file)
-		if err != nil {
-			log.Printf("unexpected error opening file: %v", err)
-			scode := strconv.Itoa(code)
-			file = fmt.Sprintf("%v/%cxx%v", path, scode[0], ext)
-			f, err := os.Open(file)
+		if content != nil {
+			w.WriteHeader(customCode)
+			io.Copy(w, content)
+		} else {
+			f, err := os.Open(filename)
 			if err != nil {
 				log.Printf("unexpected error opening file: %v", err)
-				http.NotFound(w, r)
+				scode := strconv.Itoa(code)
+				filename = fmt.Sprintf("%v/%cxx%v", path, scode[0], ext)
+				f, err := os.Open(filename)
+				if err != nil {
+					log.Printf("unexpected error opening file: %v", err)
+					http.NotFound(w, r)
+					return
+				}
+				defer f.Close()
+				log.Printf("serving custom error response for code %v and format %v from file %v", code, format, filename)
+				w.WriteHeader(code)
+				io.Copy(w, f)
 				return
 			}
 			defer f.Close()
-			log.Printf("serving custom error response for code %v and format %v from file %v", code, format, file)
-			w.WriteHeader(code)
+			log.Printf("serving custom error response for code %v and format %v from file %v", code, format, filename)
+			w.WriteHeader(customCode)
 			io.Copy(w, f)
-			return
 		}
-		defer f.Close()
-		log.Printf("serving custom error response for code %v and format %v from file %v", code, format, file)
-		w.WriteHeader(customCode)
-		io.Copy(w, f)
+
 		duration := time.Now().Sub(start).Seconds()
 
 		proto := strconv.Itoa(r.ProtoMajor)
